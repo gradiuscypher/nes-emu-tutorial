@@ -1,3 +1,6 @@
+use crate::opcodes;
+use std::collections::HashMap;
+
 pub struct CPU {
     pub register_a: u8,
     pub register_x: u8,
@@ -122,27 +125,36 @@ impl CPU {
     }
 
     pub fn run(&mut self) {
+        let ref opcodes: HashMap<u8, &'static opcodes::OpCode> = *opcodes::OPCODES_MAP;
+
         loop {
             let code = self.mem_read(self.program_counter);
             self.program_counter += 1;
 
+            let program_counter_state = self.program_counter;
+            let opcode = opcodes
+                .get(&code)
+                .expect(&format!("Opcode {:x} is not recognized", code));
+
             match code {
-                0xA9 => {
-                    self.lda(&AddressingMode::Immediate);
-                    self.program_counter += 1;
+                // LDA
+                0xa9 | 0xa5 | 0xb5 | 0xad | 0xbd | 0xb9 | 0xa1 | 0xb1 => {
+                    self.lda(&opcode.mode);
                 }
-                0xA5 => {
-                    self.lda(&AddressingMode::ZeroPage);
-                    self.program_counter += 1;
+
+                // STA
+                0x85 | 0x95 | 0x8d | 0x9d | 0x99 | 0x81 | 0x91 => {
+                    self.sta(&opcode.mode);
                 }
-                0xAD => {
-                    self.lda(&AddressingMode::Absolute);
-                    self.program_counter += 2;
-                }
-                0xAA => self.tax(),
-                0xE8 => self.inx(),
+
+                0xaa => self.tax(),
+                0xe8 => self.inx(),
                 0x00 => return,
-                _ => todo!(""),
+                _ => todo!(),
+            }
+
+            if program_counter_state == self.program_counter {
+                self.program_counter += (opcode.len - 1) as u16;
             }
         }
     }
@@ -154,6 +166,11 @@ impl CPU {
         let value = self.mem_read(addr);
         self.register_a = value;
         self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn sta(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(&mode);
+        self.mem_write(addr, self.register_a);
     }
 
     fn tax(&mut self) {
