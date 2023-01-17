@@ -137,6 +137,14 @@ impl CPU {
                 .expect(&format!("Opcode {:x} is not recognized", code));
 
             match code {
+                0x00 => return,
+                0xe8 => self.inx(),
+
+                // AND
+                0x29 | 0x25 | 0x35 | 0x2d | 0x3d | 0x39 | 0x21 | 0x31 => {
+                    self.and(&opcode.mode);
+                }
+
                 // LDA
                 0xa9 | 0xa5 | 0xb5 | 0xad | 0xbd | 0xb9 | 0xa1 | 0xb1 => {
                     self.lda(&opcode.mode);
@@ -148,8 +156,6 @@ impl CPU {
                 }
 
                 0xaa => self.tax(),
-                0xe8 => self.inx(),
-                0x00 => return,
                 _ => todo!(),
             }
 
@@ -159,9 +165,18 @@ impl CPU {
         }
     }
 
+    fn set_register_a(&mut self, value: u8) {
+        self.register_a = value;
+        self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn and(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        self.set_register_a(value & self.register_a);
+    }
+
     fn lda(&mut self, mode: &AddressingMode) {
-        // self.register_a = value;
-        // self.update_zero_and_negative_flags(self.register_a);
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
         self.register_a = value;
