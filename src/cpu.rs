@@ -5,7 +5,21 @@ pub struct CPU {
     pub register_a: u8,
     pub register_x: u8,
     pub register_y: u8,
+
+    /// # Status Register (P) http://wiki.nesdev.com/w/index.php/Status_flags
+    ///
+    ///  7 6 5 4 3 2 1 0
+    ///  N V _ B D I Z C
+    ///  | |   | | | | +--- Carry Flag
+    ///  | |   | | | +----- Zero Flag
+    ///  | |   | | +------- Interrupt Disable
+    ///  | |   | +--------- Decimal Mode (not used on NES)
+    ///  | |   +----------- Break Command
+    ///  | +--------------- Overflow Flag
+    ///  +----------------- Negative Flag
+    ///
     pub status: u8,
+
     pub program_counter: u16,
     memory: [u8; 0xFFFF],
 }
@@ -145,6 +159,22 @@ impl CPU {
                     self.and(&opcode.mode);
                 }
 
+                // ASL
+                0x0a => {
+                    self.asl_accumulator();
+                }
+
+                // ASL
+                0x06 | 0x16 | 0x0e | 0x1e => {
+                    self.asl(&opcode.mode);
+                }
+
+                // BCC
+                0x90 => self.branch(!self.status & 0b0000_0001 != 0),
+
+                // BCS
+                0xb0 => self.branch(self.status & 0b0000_0001 != 0),
+
                 // LDA
                 0xa9 | 0xa5 | 0xb5 | 0xad | 0xbd | 0xb9 | 0xa1 | 0xb1 => {
                     self.lda(&opcode.mode);
@@ -174,6 +204,49 @@ impl CPU {
         let addr = self.get_operand_address(mode);
         let value = self.mem_read(addr);
         self.set_register_a(value & self.register_a);
+    }
+
+    fn asl_accumulator(&mut self) {
+        let mut data = self.register_a;
+
+        if data >> 7 == 1 {
+            // set the CPU carry flag to 1
+            self.status = self.status | 0b0000_0001;
+        } else {
+            // set the carry flag to 0
+            self.status = self.status | 0b0000_0000;
+        }
+
+        data = data << 1;
+        self.set_register_a(data);
+    }
+
+    fn asl(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let mut data = self.mem_read(addr);
+
+        if data >> 7 == 1 {
+            // set the CPU carry flag to 1
+            self.status = self.status | 0b0000_0001;
+        } else {
+            // set the carry flag to 0
+            self.status = self.status | 0b0000_0000;
+        }
+
+        data = data << 1;
+        self.mem_write(addr, data);
+        self.update_zero_and_negative_flags(data);
+    }
+
+    fn branch(&mut self, condition: bool) {
+        if condition {
+            let jump: i8 = self.mem_read(self.program_counter) as i8;
+            let jump_addr = self
+                .program_counter
+                .wrapping_add(1)
+                .wrapping_add(jump as u16);
+            self.program_counter = jump_addr;
+        }
     }
 
     fn lda(&mut self, mode: &AddressingMode) {

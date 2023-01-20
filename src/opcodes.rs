@@ -36,6 +36,19 @@ lazy_static! {
         OpCode::new(0x21, "AND", 2, 6, AddressingMode::Indirect_X),
         OpCode::new(0x31, "AND", 2, 5, AddressingMode::Indirect_Y),
 
+        // ASL
+        OpCode::new(0x0a, "ASL", 1, 2, AddressingMode::NoneAddressing),
+        OpCode::new(0x06, "ASL", 2, 5, AddressingMode::ZeroPage),
+        OpCode::new(0x16, "ASL", 2, 6, AddressingMode::ZeroPage_X),
+        OpCode::new(0x0e, "ASL", 3, 6, AddressingMode::Absolute),
+        OpCode::new(0x1e, "ASL", 3, 7, AddressingMode::Absolute_X),
+
+        // BCC
+        OpCode::new(0x90, "BCC", 2, 2, AddressingMode::NoneAddressing),
+
+        // BCS
+        OpCode::new(0xB0, "BCS", 2, 2, AddressingMode::NoneAddressing),
+
         // LDA
         OpCode::new(0xa9, "LDA", 2, 2, AddressingMode::Immediate),
         OpCode::new(0xa5, "LDA", 2, 3, AddressingMode::ZeroPage),
