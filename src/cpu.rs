@@ -1,11 +1,8 @@
 use crate::opcodes;
+use bitflags::bitflags;
 use std::collections::HashMap;
 
-pub struct CPU {
-    pub register_a: u8,
-    pub register_x: u8,
-    pub register_y: u8,
-
+bitflags! {
     /// # Status Register (P) http://wiki.nesdev.com/w/index.php/Status_flags
     ///
     ///  7 6 5 4 3 2 1 0
@@ -17,8 +14,24 @@ pub struct CPU {
     ///  | |   +----------- Break Command
     ///  | +--------------- Overflow Flag
     ///  +----------------- Negative Flag
-    ///
-    pub status: u8,
+    pub struct CpuFlags: u8 {
+        const CARRY             = 0b00000001;
+        const ZERO              = 0b00000010;
+        const INTERRUPT_DISABLE = 0b00000100;
+        const DECIMAL_MODE      = 0b00001000;
+        const BREAK             = 0b00010000;
+        const BREAK2            = 0b00100000;
+        const OVERFLOW          = 0b01000000;
+        const NEGATIVE          = 0b10000000;
+    }
+}
+
+pub struct CPU {
+    pub register_a: u8,
+    pub register_x: u8,
+    pub register_y: u8,
+
+    pub status: CpuFlags,
 
     pub program_counter: u16,
     memory: [u8; 0xFFFF],
@@ -45,7 +58,7 @@ impl CPU {
             register_a: 0,
             register_x: 0,
             register_y: 0,
-            status: 0,
+            status: CpuFlags::from_bits_truncate(0b100100),
             program_counter: 0,
             memory: [0; 0xFFFF],
         }
@@ -119,6 +132,14 @@ impl CPU {
         self.memory[addr as usize] = data;
     }
 
+    fn set_carry_flag(&mut self) {
+        self.status.insert(CpuFlags::CARRY)
+    }
+
+    fn clear_carry_flag(&mut self) {
+        self.status.remove(CpuFlags::CARRY)
+    }
+
     pub fn load(&mut self, program: Vec<u8>) {
         self.memory[0x8000..(0x8000 + program.len())].copy_from_slice(&program[..]);
         self.mem_write_u16(0xFFFC, 0x8000)
@@ -133,7 +154,7 @@ impl CPU {
     pub fn reset(&mut self) {
         self.register_a = 0;
         self.register_x = 0;
-        self.status = 0;
+        self.status = CpuFlags::from_bits_truncate(0b100100);
 
         self.program_counter = self.mem_read_u16(0xFFFC);
     }
@@ -151,8 +172,8 @@ impl CPU {
                 .expect(&format!("Opcode {:x} is not recognized", code));
 
             match code {
+                // BRK
                 0x00 => return,
-                0xe8 => self.inx(),
 
                 // AND
                 0x29 | 0x25 | 0x35 | 0x2d | 0x3d | 0x39 | 0x21 | 0x31 => {
@@ -170,10 +191,48 @@ impl CPU {
                 }
 
                 // BCC
-                0x90 => self.branch(!self.status & 0b0000_0001 != 0),
+                0x90 => self.branch(!self.status.contains(CpuFlags::CARRY)),
 
                 // BCS
-                0xb0 => self.branch(self.status & 0b0000_0001 != 0),
+                0xb0 => self.branch(self.status.contains(CpuFlags::CARRY)),
+
+                // BEQ
+                0xf0 => self.branch(self.status.contains(CpuFlags::ZERO)),
+
+                // BIT
+                0x24 | 0x2c => self.bit(&opcode.mode),
+
+                // BMI
+                0x30 => self.branch(self.status.contains(CpuFlags::NEGATIVE)),
+
+                // BNE
+                0xd0 => self.branch(self.status.contains(CpuFlags::NEGATIVE)),
+
+                // BPL
+                0x10 => self.branch(!self.status.contains(CpuFlags::NEGATIVE)),
+
+                // BVC
+                0x50 => self.branch(!self.status.contains(CpuFlags::OVERFLOW)),
+
+                // BVS
+                0x70 => self.branch(self.status.contains(CpuFlags::OVERFLOW)),
+
+                // CLC
+                0x18 => self.clear_carry_flag(),
+
+                // CLD
+                0xd8 => self.status.remove(CpuFlags::DECIMAL_MODE),
+
+                // CLI
+                0x58 => self.status.remove(CpuFlags::INTERRUPT_DISABLE),
+
+                // CLV
+                0xb8 => self.status.remove(CpuFlags::OVERFLOW),
+
+                // CMP - TODO
+
+                // INX
+                0xe8 => self.inx(),
 
                 // LDA
                 0xa9 | 0xa5 | 0xb5 | 0xad | 0xbd | 0xb9 | 0xa1 | 0xb1 => {
@@ -186,6 +245,7 @@ impl CPU {
                 }
 
                 0xaa => self.tax(),
+
                 _ => todo!(),
             }
 
@@ -211,10 +271,10 @@ impl CPU {
 
         if data >> 7 == 1 {
             // set the CPU carry flag to 1
-            self.status = self.status | 0b0000_0001;
+            self.set_carry_flag();
         } else {
             // set the carry flag to 0
-            self.status = self.status | 0b0000_0000;
+            self.clear_carry_flag();
         }
 
         data = data << 1;
@@ -227,15 +287,32 @@ impl CPU {
 
         if data >> 7 == 1 {
             // set the CPU carry flag to 1
-            self.status = self.status | 0b0000_0001;
+            self.set_carry_flag();
         } else {
             // set the carry flag to 0
-            self.status = self.status | 0b0000_0000;
+            self.clear_carry_flag();
         }
 
         data = data << 1;
         self.mem_write(addr, data);
         self.update_zero_and_negative_flags(data);
+    }
+
+    fn bit(&mut self, mode: &AddressingMode) {
+        // ref: https://www.nesdev.org/obelisk-6502-guide/reference.html#BCC
+        let addr = self.get_operand_address(mode);
+        let data = self.mem_read(addr);
+
+        let res = self.register_a & data;
+
+        if res == 0 {
+            self.status.insert(CpuFlags::ZERO);
+        } else {
+            self.status.remove(CpuFlags::ZERO);
+        }
+
+        self.status.set(CpuFlags::NEGATIVE, data & 0b10000000 > 0);
+        self.status.set(CpuFlags::OVERFLOW, data & 0b01000000 > 0)
     }
 
     fn branch(&mut self, condition: bool) {
@@ -273,15 +350,15 @@ impl CPU {
 
     fn update_zero_and_negative_flags(&mut self, result: u8) {
         if result == 0 {
-            self.status = self.status | 0b0000_0010;
+            self.status.insert(CpuFlags::ZERO);
         } else {
-            self.status = self.status & 0b1111_1101;
+            self.status.remove(CpuFlags::ZERO);
         }
 
         if result & 0b1000_0000 != 0 {
-            self.status = self.status | 0b1000_0000;
+            self.status.insert(CpuFlags::NEGATIVE);
         } else {
-            self.status = self.status & 0b0111_1111;
+            self.status.remove(CpuFlags::NEGATIVE);
         }
     }
 }
@@ -295,15 +372,15 @@ mod test {
         let mut cpu = CPU::new();
         cpu.load_and_run(vec![0xa9, 0x05, 0x00]);
         assert_eq!(cpu.register_a, 0x05);
-        assert!(cpu.status & 0b0000_0010 == 0b00);
-        assert!(cpu.status & 0b1000_0000 == 0);
+        assert!(cpu.status.bits() & 0b0000_0010 == 0b00);
+        assert!(cpu.status.bits() & 0b1000_0000 == 0);
     }
 
     #[test]
     fn test_0xa9_lda_zero_flag() {
         let mut cpu = CPU::new();
         cpu.load_and_run(vec![0xa9, 0x00, 0x00]);
-        assert!(cpu.status & 0b0000_0010 == 0b10);
+        assert!(cpu.status.bits() & 0b0000_0010 == 0b10);
     }
 
     #[test]
