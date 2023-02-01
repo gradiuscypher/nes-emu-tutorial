@@ -175,6 +175,8 @@ impl CPU {
                 // BRK
                 0x00 => return,
 
+                // ADC - TODO
+
                 // AND
                 0x29 | 0x25 | 0x35 | 0x2d | 0x3d | 0x39 | 0x21 | 0x31 => {
                     self.and(&opcode.mode);
@@ -229,7 +231,23 @@ impl CPU {
                 // CLV
                 0xb8 => self.status.remove(CpuFlags::OVERFLOW),
 
-                // CMP - TODO
+                // CMP
+                0xc9 | 0xc5 | 0xd5 | 0xcd | 0xdd | 0xd9 | 0xc1 | 0xd1 => {
+                    self.compare(&opcode.mode, self.register_a)
+                }
+
+                // CPX
+                0xe0 | 0xe4 | 0xec => self.compare(&opcode.mode, self.register_x),
+
+                // CPX
+                0xc0 | 0xc4 | 0xcc => self.compare(&opcode.mode, self.register_y),
+
+                // DEC
+                0xc6 | 0xd6 | 0xce | 0xde => {
+                    self.dec(&opcode.mode);
+                }
+
+                // DEX - TODO
 
                 // INX
                 0xe8 => self.inx(),
@@ -324,6 +342,28 @@ impl CPU {
                 .wrapping_add(jump as u16);
             self.program_counter = jump_addr;
         }
+    }
+
+    fn compare(&mut self, mode: &AddressingMode, compare_with: u8) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+
+        if self.register_a >= value {
+            self.status.insert(CpuFlags::CARRY);
+        } else {
+            self.status.remove(CpuFlags::CARRY);
+        }
+
+        self.update_zero_and_negative_flags(compare_with.wrapping_sub(value))
+    }
+
+    fn dec(&mut self, mode: &AddressingMode) -> u8 {
+        let addr = self.get_operand_address(mode);
+        let mut data = self.mem_read(addr);
+        data = data.wrapping_sub(1);
+        self.mem_write(addr, data);
+        self.update_zero_and_negative_flags(self.register_a);
+        data
     }
 
     fn lda(&mut self, mode: &AddressingMode) {
