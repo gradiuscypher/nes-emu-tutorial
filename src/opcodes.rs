@@ -94,6 +94,24 @@ lazy_static! {
         OpCode::new(0xa1, "LDA", 2, 6, AddressingMode::Indirect_X),
         OpCode::new(0xb1, "LDA", 2, 5, AddressingMode::Indirect_Y),
 
+        OpCode::new(0xa2, "LDX", 2, 2, AddressingMode::Immediate),
+        OpCode::new(0xa6, "LDX", 2, 3, AddressingMode::ZeroPage),
+        OpCode::new(0xb6, "LDX", 2, 4, AddressingMode::ZeroPage_Y),
+        OpCode::new(0xae, "LDX", 3, 4, AddressingMode::Absolute),
+        OpCode::new(0xbe, "LDX", 3, 4, AddressingMode::Absolute_Y),
+
+        OpCode::new(0xa0, "LDY", 2, 2, AddressingMode::Immediate),
+        OpCode::new(0xa4, "LDY", 2, 3, AddressingMode::ZeroPage),
+        OpCode::new(0xb4, "LDY", 2, 4, AddressingMode::ZeroPage_X),
+        OpCode::new(0xac, "LDY", 3, 4, AddressingMode::Absolute),
+        OpCode::new(0xbc, "LDY", 3, 4, AddressingMode::Absolute_X),
+
+        OpCode::new(0x4a, "LSR", 1, 2, AddressingMode::NoneAddressing),
+        OpCode::new(0x46, "LSR", 2, 5, AddressingMode::ZeroPage),
+        OpCode::new(0x56, "LSR", 2, 6, AddressingMode::ZeroPage_X),
+        OpCode::new(0x4e, "LSR", 3, 6, AddressingMode::Absolute),
+        OpCode::new(0x5e, "LSR", 3, 7, AddressingMode::Absolute_X),
+
         OpCode::new(0x49, "EOR", 2, 2, AddressingMode::Immediate),
         OpCode::new(0x45, "EOR", 2, 3, AddressingMode::ZeroPage),
         OpCode::new(0x55, "EOR", 2, 4, AddressingMode::ZeroPage_X),

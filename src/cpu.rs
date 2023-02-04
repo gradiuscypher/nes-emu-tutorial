@@ -304,12 +304,34 @@ impl CPU {
                     self.program_counter = indirect_ref;
                 }
 
-                // JSR - TODO
-                0x20 => {}
+                // JSR
+                0x20 => {
+                    self.stack_push_u16(self.program_counter + 2 - 1);
+                    let mem_address = self.mem_read_u16(self.program_counter);
+                    self.program_counter = mem_address;
+                }
 
                 // LDA
                 0xa9 | 0xa5 | 0xb5 | 0xad | 0xbd | 0xb9 | 0xa1 | 0xb1 => {
                     self.lda(&opcode.mode);
+                }
+
+                // LDX
+                0xa2 | 0xa6 | 0xb6 | 0xae | 0xbe => {
+                    self.ldx(&opcode.mode);
+                }
+
+                // LDY
+                0xa0 | 0xa4 | 0xb4 | 0xac | 0xbc => {
+                    self.ldy(&opcode.mode);
+                }
+
+                // LSR - accumulator - TODO
+                0x4a => self.lsr_a(),
+
+                // LSR
+                0x46 | 0x56 | 0x4e | 0x5e => {
+                    self.lsr(&opcode.mode);
                 }
 
                 // STA
@@ -461,6 +483,29 @@ impl CPU {
         let value = self.mem_read(addr);
         self.register_a = value;
         self.update_zero_and_negative_flags(self.register_a);
+    }
+
+    fn ldx(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        self.register_x = value;
+        self.update_zero_and_negative_flags(self.register_x);
+    }
+
+    fn ldy(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
+        self.register_y = value;
+        self.update_zero_and_negative_flags(self.register_y);
+    }
+
+    fn lsr_a(&mut self) {
+        // TODO
+    }
+
+    fn lsr(&mut self, mode: &AddressingMode) {
+        let addr = self.get_operand_address(mode);
+        let value = self.mem_read(addr);
     }
 
     fn sta(&mut self, mode: &AddressingMode) {
